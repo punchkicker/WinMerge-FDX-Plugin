@@ -1,0 +1,124 @@
+<scriptlet>
+<implements type="Automation" id="dispatcher">
+    <property name="PluginEvent"><get/></property>
+    <property name="PluginDescription"><get/></property>
+    <property name="PluginFileFilters"><get/></property>
+    <property name="PluginIsAutomatic"><get/></property>
+    <method name="PluginOnEvent"/>
+    <method name="UnpackFile"/>
+    <method name="PackFile"/>
+</implements>
+
+<script language="JScript">
+
+/**
+ * @file UnpackFDX.sct
+ * @description WinMerge plugin to unpack Final Draft (.fdx) files for comparison.
+ * It extracts the screenplay content into a formatted, readable plain text file.
+ */
+
+// Global File System Object
+var fso = new ActiveXObject("Scripting.FileSystemObject");
+
+// Tells WinMerge the event type.
+function get_PluginEvent() {
+    return "FILE_PACK_UNPACK";
+}
+
+// Returns the description of the plugin
+function get_PluginDescription() {
+    return "Unpacks Final Draft (.fdx) files into plain text.";
+}
+
+// Tells WinMerge to use this plugin for files ending in .fdx
+function get_PluginFileFilters() {
+    return "\\.fdx$";
+}
+
+// Tells WinMerge this is an automatic unpacker plugin
+function get_PluginIsAutomatic() {
+    return true;
+}
+
+// A required function that WinMerge calls for certain events. We don't need it, so it's empty.
+function PluginOnEvent(eventType, obj) {
+    // This function is required by WinMerge but can be left empty.
+}
+
+// A required function for repacking files. Currently, we only read, so it just returns false.
+function PackFile(fileSrc, fileDst, pbChanged, pSubcode) {
+    return false;
+}
+
+/**
+ * The main function that WinMerge calls to unpack a file.
+ * @param {string} fileSrc - The full path to the source .fdx file.
+ * @param {string} fileDst - The full path to the temporary destination text file.
+ * @param {object} pbChanged - A reference object to signal if changes were made.
+ * @param {object} pSubcode - A reference object for a sub-error code.
+ * @returns {Array} - An array indicating the result of the operation.
+ */
+function UnpackFile(fileSrc, fileDst, pbChanged, pSubcode) {
+    var fo = fso.CreateTextFile(fileDst, true, true); // Create destination file as Unicode
+    var xmlDoc = new ActiveXObject("MSXML2.DOMDocument");
+    xmlDoc.async = false;
+    xmlDoc.load(fileSrc);
+
+    // Check if the XML was parsed correctly
+    if (xmlDoc.parseError.errorCode !== 0) {
+        fo.WriteLine("Error parsing FDX file: " + xmlDoc.parseError.reason);
+    } else {
+        // Get all <Paragraph> elements from the FDX file
+        var paragraphs = xmlDoc.selectNodes("//Paragraph");
+        
+        for (var i = 0; i < paragraphs.length; i++) {
+            var p = paragraphs[i];
+            var pType = p.getAttribute("Type");
+            var text = p.text;
+
+            // Format the text based on the paragraph type (Scene Heading, Action, etc.)
+            switch (pType) {
+                case "Scene Heading":
+                    fo.WriteLine(text.toUpperCase());
+                    fo.WriteLine("");
+                    break;
+                case "Action":
+                    fo.WriteLine(text);
+                    fo.WriteLine("");
+                    break;
+                case "Character":
+                    fo.WriteLine("    " + text.toUpperCase());
+					//fo.WriteLine(text.toUpperCase());
+                    break;
+                case "Parenthetical":
+                    fo.WriteLine("    (" + text + ")");
+					//fo.WriteLine("(" + text + ")");
+                    break;
+                case "Dialogue":
+                    fo.WriteLine("        " + text);
+					//fo.WriteLine(text);
+                    fo.WriteLine("");
+                    break;
+				case "Transition":
+                    fo.WriteLine("            " + text.toUpperCase());
+                    fo.WriteLine("");
+                    break;
+            }
+        }
+    }
+
+    fo.Close();
+
+    // Signal to WinMerge that the operation was successful
+    pbChanged = true;
+    pSubcode = 0;
+
+    var result = new ActiveXObject("Scripting.Dictionary");
+    result.Add(0, true);
+    result.Add(1, pbChanged);
+    result.Add(2, pSubcode);
+    return result.Items();
+}
+
+</script>
+</scriptlet>
